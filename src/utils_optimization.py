@@ -11,6 +11,7 @@ from peptides import Peptide
 from Bio import Align
 from Bio.Align import substitution_matrices
 from sklearn.neighbors import LocalOutlierFactor
+import lightgbm as lgb
 
 
 def load_dataset():
@@ -265,8 +266,14 @@ class Featurizer():
 # Function to predict penetration
 def pred_penetration(features_query, models, best_iteration, models_number):
     proba_p = 0.0
-    for model in models:
-        proba_p += model.predict(features_query, num_iteration=best_iteration) / models_number
+    if isinstance(models, lgb.basic.Booster):
+        proba_p = models.predict(features_query, num_iteration=best_iteration)
+    elif isinstance(models, lgb.engine.CVBooster):
+        for model in models:
+            proba_p += model.predict(features_query, num_iteration=best_iteration) / models_number
+    else:
+        print('Type of model not supported')
+        return 0
     return proba_p[0]
 
 # Function to calculate anomaly score
@@ -289,7 +296,7 @@ def my_fitness(query, params_fit):
     n_models = params_fit['n_models']
     
     features_query = featurizer.compute_features(query)
-    proba_p = pred_penetration(features_query, models['models'].boosters, best_iteration, n_models)
+    proba_p = pred_penetration(features_query, models['models_refit'], best_iteration, n_models)
 
     clf_anomaly = params_fit['clf_anomaly']
     pos_score = anomaly_score(features_query, clf_anomaly)[0]
